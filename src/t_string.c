@@ -29,6 +29,7 @@
 
 #include "redis.h"
 #include <math.h> /* isnan(), isinf() */
+#include <time.h>
 
 /*-----------------------------------------------------------------------------
  * String Commands

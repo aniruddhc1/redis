@@ -72,9 +72,13 @@ int hashTypeGetFromZiplist(robj *o, robj *field,
 
     redisAssert(o->encoding == REDIS_ENCODING_ZIPLIST);
 
+    printf("lockwood");
+
     field = getDecodedObject(field);
+    printf("SIZE OF FIELD IS %d", sizeof(field));
 
     zl = o->ptr;
+    printf("ANIRUDDH IS %s \n\n\n\n\n", zl);
     fptr = ziplistIndex(zl, ZIPLIST_HEAD);
     if (fptr != NULL) {
         fptr = ziplistFind(fptr, field->ptr, sdslen(field->ptr), 1);
@@ -92,7 +96,7 @@ int hashTypeGetFromZiplist(robj *o, robj *field,
         redisAssert(ret);
         return 0;
     }
-
+    printf("sad, sad face :( :( :( :( :( \n \n\n\n\n");
     return -1;
 }
 
@@ -768,4 +772,64 @@ void hscanCommand(redisClient *c) {
     if ((o = lookupKeyReadOrReply(c,c->argv[1],shared.emptyscan)) == NULL ||
         checkType(c,o,REDIS_HASH)) return;
     scanGenericCommand(c,o,cursor);
+}
+
+
+
+//lambda counter has key -> currentValue, timestamp and tau
+
+/* data structure used : 
+    hash data structure
+    key -> currValue : _, halfLife : _, currentTime: _
+*/
+void incrDecayCommand(redisClient *c, long long incr, long long decayTime) {
+    
+    c = c;
+    incr=incr;
+    decayTime = decayTime;
+    // updateDecayCounter();
+
+}
+
+void getDecayCommand(redisClient *c) {
+
+    //hmget with just the currValue as the key 
+    robj *o; 
+
+    o = lookupKeyRead(c->db, c->argv[1]);
+    if (o != NULL && o->type != REDIS_HASH) {
+        addReply(c, shared.wrongtypeerr);
+        return;
+    }
+
+    // addReplyMultiBulkLen(c, c->argc-2);
+    
+    printf("FUCK YEA \n");
+
+    robj field;
+    char* s = "currValue";
+    field.ptr = s;
+    field.encoding = REDIS_ENCODING_RAW;
+    field.type = REDIS_HASH;
+    field.refcount = 1;
+
+    printf("FUCKED UP WITHIN NIGGA");
+
+    addHashFieldToReply(c, o, &field);
+
+    // updateDecayCounter();
+    return;
+}
+
+void updateDecayCounter(redisClient *c){
+    time_t currentTime = time(NULL);
+    //given the key id, do a lookup, get the key, 
+    //get the appropriate timestamp and update
+    long deltaTime = currentTime;
+
+    // double tau = halfLife / math.log(2.0)
+    //value = Math.exp(deltaTime * -0.001 / tau)
+
+    //TODO : figure out how to put a (key, value, tau) tuple in the db
+    //and how to do lookups
 }
