@@ -44,6 +44,7 @@ void slotToKeyFlush(void);
 robj *lookupKey(redisDb *db, robj *key) {
     dictEntry *de = dictFind(db->dict,key->ptr);
     if (de) {
+
         robj *val = dictGetVal(de);
 
         /* Update the access time for the ageing algorithm.
@@ -64,8 +65,9 @@ robj *lookupKeyRead(redisDb *db, robj *key) {
     val = lookupKey(db,key);
     if (val == NULL)
         server.stat_keyspace_misses++;
-    else
+    else{
         server.stat_keyspace_hits++;
+    }
     return val;
 }
 

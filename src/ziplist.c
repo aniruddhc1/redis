@@ -576,6 +576,12 @@ static unsigned char *__ziplistDelete(unsigned char *zl, unsigned char *p, unsig
 
 /* Insert item at "p". */
 static unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned char *s, unsigned int slen) {
+
+    printf("\nwe are inserting zl : %s\n\n", zl);
+    printf("we are inserting p : %s\n", p);
+    printf("we are inserting s : %s\n", s);
+    printf("we are inserting slen : %d\n", slen);
+    
     size_t curlen = intrev32ifbe(ZIPLIST_BYTES(zl)), reqlen;
     unsigned int prevlensize, prevlen = 0;
     size_t offset;
@@ -764,6 +770,11 @@ unsigned int ziplistGet(unsigned char *p, unsigned char **sstr, unsigned int *sl
 
 /* Insert an entry at "p". */
 unsigned char *ziplistInsert(unsigned char *zl, unsigned char *p, unsigned char *s, unsigned int slen) {
+    printf("we are inserting zl : %s", zl);
+    printf("we are inserting p : %s", p);
+    printf("we are inserting s : %s", s);
+    printf("we are inserting slen : %d", slen);
+    
     return __ziplistInsert(zl,p,s,slen);
 }
 

@@ -1367,7 +1367,7 @@ void getbitCommand(redisClient *c);
 void setrangeCommand(redisClient *c);
 void getrangeCommand(redisClient *c);
 void incrCommand(redisClient *c);
-void incrDecayCommand(redisClient *c, long long incr, long long decayTime);
+void incrDecayCommand(redisClient *c);
 void getDecayCommand(redisClient *c);
 void updateDecayCounter();
 void decrCommand(redisClient *c);
