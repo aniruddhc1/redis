@@ -174,7 +174,6 @@ int hashTypeSet(robj *o, robj *field, robj *value) {
         unsigned char *zl, *fptr, *vptr;
 
         field = getDecodedObject(field);
-        printf("\nproblem seems to be in the value\n");
         value = getDecodedObject(value);
 
         zl = o->ptr;
@@ -183,7 +182,6 @@ int hashTypeSet(robj *o, robj *field, robj *value) {
         if (fptr != NULL) {
             fptr = ziplistFind(fptr, field->ptr, sdslen(field->ptr), 1);
             if (fptr != NULL) {
-                printf("\n\n round 2!!! \n\n");
                 /* Grab pointer to the value (fptr points to the field) */
                 vptr = ziplistNext(zl, fptr);
                 redisAssert(vptr != NULL);
@@ -192,23 +190,12 @@ int hashTypeSet(robj *o, robj *field, robj *value) {
                 /* Delete value */
                 zl = ziplistDelete(zl, &vptr);
 
-                printf("insert new value %p \n\n", value);
-
                 /* Insert new value */
-                printf("we are inserting zl : %s and %p \n", zl, &zl);
-                printf("we are inserting p : %s \n and %p", vptr, &vptr);
-                printf("we are inserting s : %s, %p \n", value->ptr, &value->ptr);
-                printf("we are inserting slen : %zu \n", sdslen(value->ptr));
                 zl = ziplistInsert(zl, vptr, value->ptr, sdslen(value->ptr));
-
-                printf("fuck up happened above....\n\n\n ");
             }
         }
 
-        printf("\n\nI speak ruby\n\n");
-
         if (!update) {
-            printf("not updated yet... pushing!!");
             /* Push new field/value pair onto the tail of the ziplist */
             zl = ziplistPush(zl, field->ptr, sdslen(field->ptr), ZIPLIST_TAIL);
             zl = ziplistPush(zl, value->ptr, sdslen(value->ptr), ZIPLIST_TAIL);
@@ -216,7 +203,6 @@ int hashTypeSet(robj *o, robj *field, robj *value) {
         o->ptr = zl;
         decrRefCount(field);
         decrRefCount(value);
-        printf("you're a nigger bro\n\n");
 
         /* Check if the ziplist needs to be converted to a hash table */
         if (hashTypeLength(o) > server.hash_max_ziplist_entries)
@@ -418,7 +404,6 @@ robj *hashTypeLookupWriteOrCreate(redisClient *c, robj *key) {
             addReply(c,shared.wrongtypeerr);
             return NULL;
         }
-        printf("\n\ngetting into the else case..\n\n");
     }
     return o;
 }
@@ -786,34 +771,23 @@ void hscanCommand(redisClient *c) {
     scanGenericCommand(c,o,cursor);
 }
 
-unsigned long long currentTimestamp(){
+long long currentTimestamp(){
     struct timeval currTime;
     gettimeofday(&currTime, NULL);
+    long long millis = currTime.tv_sec*1000LL + currTime.tv_usec/1000;
 
-    unsigned long long millis = currTime.tv_sec*1000LL + currTime.tv_usec/1000;
     return millis; 
 }
 
-
-//lambda counter has key -> currentValue, timestamp and tau
-
-/* data structure used : 
-    hash data structure
-    hmset key -> currValue : _, halfLife : _, currentTime: _
-*/
-
-/**
-    TODO :
-        incr should work by tomorrow, bug-free (along with incr incr incr)
-        decay logic start on thurs, finish on sunday
-        cleanup the week after. 
-        ship by october 15 or so.
-
- *  user input is : 
- *  INCRDECAY key initialValue halfLife
- * 
- *  actually put : 
- *  HMSET key initialValue __ halfLife __ currTime(stamp) __ 
+/* lambda counter has key -> currentValue, timestamp and tau
+ * data structure used : 
+ * hash data structure
+ * hmset key -> currValue : _, halfLife : _, currentTime: _
+ *
+ * user input is : 
+ * INCRDECAY key initialValue halfLife 
+ * actually put into db: 
+ * HMSET key initialValue __ halfLife __ currTime(stamp) __ 
  */
 void incrDecayCommand(redisClient *c) {
     robj *o;
@@ -824,86 +798,67 @@ void incrDecayCommand(redisClient *c) {
     }
 
     robj* currValueValue = c->argv[2];
-    robj* halfLifeValue = c->argv[3]; //half life time
+    robj* halfLifeValue = c->argv[3]; /*Half life time */
+
     unsigned long long currTime = currentTimestamp(); //timestamp
 
     robj currValueKey = {.ptr = sdsnew("currValue"), 
                          .encoding = REDIS_ENCODING_RAW,
-                         .type = REDIS_STRING,
+                         .type = REDIS_ENCODING_EMBSTR,
                          .refcount = 1 };
 
     o = lookupKeyRead(c->db, c->argv[1]);
 
     if(o != NULL){ 
-        printf("fuced in the not null cae......... ");
         unsigned int vlen = UINT_MAX;
         long long vll = LLONG_MAX;
         hashTypeGetFromZiplist(o, &currValueKey, NULL,  &vlen, &vll);
-        printf("my vll is %lld \n ", vll);
-        long long res = atoll((char*)currValueValue->ptr) + vll;
-        printf("address si senora %lld\n\n", res);
-        *(long long *)currValueValue->ptr = res;
-        printf("\n\ncurrent value value pointer address is now!!! %p and %lld \n\n", &currValueValue->ptr, *((long long *)currValueValue->ptr));
+        long long res = atoll(currValueValue->ptr) + vll;
+        currValueValue->ptr = sdsfromlonglong(res);
     }
 
     robj halfLifeKey = {.ptr = sdsnew("halfLife"), 
-                        .encoding = REDIS_ENCODING_RAW,
+                        .encoding = REDIS_ENCODING_EMBSTR,
                         .type = REDIS_STRING,
                         .refcount = 1 };
 
     robj currTimeKey = {.ptr = sdsnew("currTime"), 
-                        .encoding = REDIS_ENCODING_RAW,
+                        .encoding = REDIS_ENCODING_EMBSTR,
                         .type = REDIS_STRING,
                         .refcount = 1 };
 
     robj currTimeValue = {
-                     .ptr = zmalloc(sizeof(long long *)),
+                     .ptr = sdsfromlonglong(currTime),
                      .encoding = REDIS_ENCODING_RAW,
-                     .type = REDIS_HASH_VALUE,
+                     .type = REDIS_STRING,
                      .refcount = 1 };
 
-    *((unsigned long long*) currTimeValue.ptr) = currTime;
-
-    //create the key in the database 
+    /* Create the key in the database  */
     if((o = hashTypeLookupWriteOrCreate(c, c->argv[1])) == NULL){
-        //creating key caused an error in the db 
         redisPanic("creating key caused an error in the database");
     }
 
-    //encode and set initValue, halfLife, currTime. 
-    //setting currValue
+    /* Encode and set initValue, halfLife, currTime. */
     
-    printf("got through here");
     hashTypeSet(o, &currValueKey, currValueValue);
-    printf("southern\n\n");
-
-    //setting half life
     hashTypeSet(o, &halfLifeKey, halfLifeValue);
-
-    printf("district\n\n");
-
-    //setting current time
     hashTypeSet(o, &currTimeKey, &currTimeValue);
-    printf("SLAVES!!\n\n");
 
     addReply(c, shared.ok);
 
     signalModifiedKey(c->db, c->argv[1]);
     notifyKeyspaceEvent(REDIS_NOTIFY_HASH, "hset", c->argv[1],c->db->id);
     server.dirty++;
-    // updateDecayCounter();
 }
 
 void getDecayCommand(redisClient *c) {
 
-    //hmget with just the currValue as the key 
+    updateDecayCounter();
+
+    /* HMGET with currValue as the key */
     robj *o; 
 
     o = lookupKeyRead(c->db, c->argv[1]);
-    if (o != NULL && o->type != REDIS_HASH) {
-        addReply(c, shared.wrongtypeerr);
-        return;
-    }
     
     robj field = {.ptr = sdsnew("currValue"), 
                          .encoding = REDIS_ENCODING_RAW,
@@ -912,15 +867,18 @@ void getDecayCommand(redisClient *c) {
 
     addHashFieldToReply(c, o, &field);
 
-    // updateDecayCounter();
     return;
 }
-/*
+
 void updateDecayCounter(redisClient *c){
-    time_t currentTime = time(NULL);
+
+    robj* currValueValue = c->argv[2];
+    robj* halfLifeValue = c->argv[3]; /*Half life time */
+
+    double tau = halfLifeValue->ptr;
+
     //given the key id, do a lookup, get the key, 
     //get the appropriate timestamp and update
-    long deltaTime = currentTime;
 
     // long tau = halfLife/log(2.0); needed for update only
 
@@ -931,4 +889,3 @@ void updateDecayCounter(redisClient *c){
     //TODO : figure out how to put a (key, value, tau) tuple in the db
     //and how to do lookups
 }
-*/
