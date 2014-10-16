@@ -853,29 +853,40 @@ void incrDecayCommand(redisClient *c) {
 
 void getDecayCommand(redisClient *c) {
 
-    updateDecayCounter();
-
     /* HMGET with currValue as the key */
     robj *o; 
 
     o = lookupKeyRead(c->db, c->argv[1]);
+
+    //get the currValue, halfLife and currTime from the hash function
+    //update their values before proceeding to the get command
+
+    updateDecayCounter();
     
     robj field = {.ptr = sdsnew("currValue"), 
-                         .encoding = REDIS_ENCODING_RAW,
-                         .type = REDIS_STRING,
-                         .refcount = 1 };
+                  .encoding = REDIS_ENCODING_RAW,
+                  .type = REDIS_STRING,
+                  .refcount = 1 };
 
     addHashFieldToReply(c, o, &field);
 
     return;
 }
 
-void updateDecayCounter(redisClient *c){
+void updateDecayCounter(robj *currValue, robj *halfLife, robj *currTime){
 
-    robj* currValueValue = c->argv[2];
-    robj* halfLifeValue = c->argv[3]; /*Half life time */
+    /*
+        for GETDECAY : 
+            pass in three values to helper function
 
-    double tau = halfLifeValue->ptr;
+        for INCRDECAY : 
+            currValue and halfLife passed in from cmd-line 
+            currTime passed in from lookupKeyRead() function
+    */
+
+    // double tau = atof((sds)halfLifeValue->ptr);
+
+    // printf("TAU IS %f", tau);
 
     //given the key id, do a lookup, get the key, 
     //get the appropriate timestamp and update
