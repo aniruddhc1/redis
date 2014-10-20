@@ -823,17 +823,13 @@ void incrDecayCommand(redisClient *c) {
 
     o = lookupKeyRead(c->db, c->argv[1]);
     if(o != NULL){
-        // unsigned int vlen = UINT_MAX;
-        // double vll = LLONG_MAX;
-        // hashTypeGetFromZiplist(o, &currValueKey, NULL,  &vlen, &vll);
-        double* vll;
-        getDoubleFromObject(currValueKey, vll);
+        unsigned int vlen = UINT_MAX;
+        long long vll = LLONG_MAX;
+        hashTypeGetFromZiplist(o, &currValueKey, NULL,  &vlen, &vll);
         updateDecayCounter(o, &currValueKey, vll, halfLifeValue);
 
-        double res = atoll(currValueValue->ptr) + vll;
-        char result[128];
-        d2string(result, sizeof(result), res);
-        currValueValue->ptr = sdsnew(result);
+        long long res = atoll(currValueValue->ptr) + vll;
+        currValueValue->ptr = sdsfromlonglong(res);
     }
     robj halfLifeKey = {
         .ptr = sdsnew("halfLife"), 
@@ -868,7 +864,7 @@ void getDecayCommand(redisClient *c) {
     if(o != NULL){
         //get currValueValue
         unsigned int vlen_currValueValue = UINT_MAX;
-        double vll_currValueValue = LLONG_MAX;
+        long long vll_currValueValue = LLONG_MAX;
         hashTypeGetFromZiplist(o, &currValueKey, NULL, 
             &vlen_currValueValue, &vll_currValueValue);
 
@@ -896,7 +892,7 @@ void getDecayCommand(redisClient *c) {
     addHashFieldToReply(c, o, &currValueKey);
 }
 
-void updateDecayCounter(robj* o, robj *currValueKey, double currentValue, 
+void updateDecayCounter(robj* o, robj *currValueKey, long long currentValue, 
                         robj *halfLife){
     robj currTimeKey = {
         .ptr = sdsnew("currTime"), 
@@ -913,11 +909,9 @@ void updateDecayCounter(robj* o, robj *currValueKey, double currentValue,
     if(deltaTime >= 0){ //almost always, but better safe than sorry!
         double tau = atoll(halfLife->ptr) / log(2.0); 
         currentValue *= exp(deltaTime * -0.001 / tau);
-        char result[128]; 
-        d2string(result, sizeof(result), currentValue);
 
         robj currValueValue = {
-            .ptr = sdsnew(result),
+            .ptr = sdsfromlonglong(currentValue),
             .encoding = REDIS_ENCODING_RAW,
             .type = REDIS_ENCODING_EMBSTR,
             .refcount = 1 };
