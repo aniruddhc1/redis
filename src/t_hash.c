@@ -775,23 +775,14 @@ long long currentTimestampInMillis(){
     struct timeval currTime;
     gettimeofday(&currTime, NULL);
     long long millis = currTime.tv_sec*1000LL + currTime.tv_usec/1000;
-
     return millis; 
 }
 
 void setCurrentTime(robj *o){
-    unsigned long long currTime = currentTimestampInMillis(); //timestamp        
-    robj currTimeKey = {
-        .ptr = sdsnew("currTime"), 
-        .encoding = REDIS_ENCODING_EMBSTR,
-        .type = REDIS_STRING,
-        .refcount = 1 };        
-    robj currTimeValue = {
-        .ptr = sdsfromlonglong(currTime),
-        .encoding = REDIS_ENCODING_RAW,
-        .type = REDIS_STRING,
-        .refcount = 1 };        
-    hashTypeSet(o, &currTimeKey, &currTimeValue);    
+    unsigned long long currTime = currentTimestampInMillis(); 
+    robj *currTimeKey = createObject(REDIS_STRING, sdsnew("currTime"));
+    robj *currTimeValue = createObject(REDIS_STRING, sdsfromlonglong(currTime));
+    hashTypeSet(o, currTimeKey, currTimeValue);    
 }
 
 /* lambda counter has key -> currentValue, timestamp and half life 
@@ -815,27 +806,20 @@ void incrDecayCommand(redisClient *c) {
     robj* currValueValue = c->argv[2]; //TODO double
     robj* halfLifeValue = c->argv[3];
 
-    robj currValueKey = {
-        .ptr = sdsnew("currValue"), 
-        .encoding = REDIS_ENCODING_RAW,
-        .type = REDIS_ENCODING_EMBSTR,
-        .refcount = 1 };
+    robj *currValueKey = createObject(REDIS_STRING, sdsnew("currValue"));
 
     o = lookupKeyRead(c->db, c->argv[1]);
     if(o != NULL){
         unsigned int vlen = UINT_MAX;
         long long vll = LLONG_MAX;
-        hashTypeGetFromZiplist(o, &currValueKey, NULL,  &vlen, &vll);
-        updateDecayCounter(o, &currValueKey, vll, halfLifeValue);
+        hashTypeGetFromZiplist(o, currValueKey, NULL,  &vlen, &vll);
+        updateDecayCounter(o, currValueKey, vll, halfLifeValue);
 
         long long res = atoll(currValueValue->ptr) + vll;
         currValueValue->ptr = sdsfromlonglong(res);
     }
-    robj halfLifeKey = {
-        .ptr = sdsnew("halfLife"), 
-        .encoding = REDIS_ENCODING_EMBSTR,
-        .type = REDIS_STRING,
-        .refcount = 1 };
+
+    robj *halfLifeKey = createObject(REDIS_STRING, sdsnew("halfLife"));
 
     /* Create the key in the database  */
     if((o = hashTypeLookupWriteOrCreate(c, c->argv[1])) == NULL){
@@ -843,12 +827,11 @@ void incrDecayCommand(redisClient *c) {
     }
     
     setCurrentTime(o);
-    hashTypeSet(o, &currValueKey, currValueValue);
-    hashTypeSet(o, &halfLifeKey, halfLifeValue);
+    hashTypeSet(o, currValueKey, currValueValue);
+    hashTypeSet(o, halfLifeKey, halfLifeValue);
 
     addReply(c, shared.ok);
     signalModifiedKey(c->db, c->argv[1]);
-    notifyKeyspaceEvent(REDIS_NOTIFY_HASH, "hset", c->argv[1],c->db->id);
     server.dirty++;
 }
 
@@ -856,52 +839,36 @@ void getDecayCommand(redisClient *c) {
     /* HMGET with currValue as the key */
     robj *o; 
     o = lookupKeyRead(c->db, c->argv[1]);
-    robj currValueKey = {
-        .ptr = sdsnew("currValue"), 
-        .encoding = REDIS_ENCODING_RAW,
-        .type = REDIS_ENCODING_EMBSTR,
-        .refcount = 1 };
+    robj *currValueKey = createObject(REDIS_STRING, sdsnew("currValue"));
     if(o != NULL){
         //get currValueValue
         unsigned int vlen_currValueValue = UINT_MAX;
         long long vll_currValueValue = LLONG_MAX;
-        hashTypeGetFromZiplist(o, &currValueKey, NULL, 
+        hashTypeGetFromZiplist(o, currValueKey, NULL, 
             &vlen_currValueValue, &vll_currValueValue);
-
-        //get halfLifeValue 
-        robj halfLifeKey = {
-            .ptr = sdsnew("halfLife"), 
-            .encoding = REDIS_ENCODING_EMBSTR,
-            .type = REDIS_STRING,
-            .refcount = 1 };
+        robj *halfLifeKey = createObject(REDIS_STRING, sdsnew("halfLife"));
 
         unsigned int vlen_halfLifeValueValue = UINT_MAX;
         long long vll_halfLifeValueValue = LLONG_MAX;
-        hashTypeGetFromZiplist(o, &halfLifeKey, NULL, 
+        hashTypeGetFromZiplist(o, halfLifeKey, NULL, 
             &vlen_halfLifeValueValue, &vll_halfLifeValueValue);
-        robj halfLifeValue = {
-            .ptr = sdsfromlonglong(vll_halfLifeValueValue),
-            .encoding = REDIS_ENCODING_RAW,
-            .type = REDIS_ENCODING_EMBSTR,
-            .refcount = 1 };
+        robj *halfLifeValue = createObject(REDIS_STRING, 
+            sdsfromlonglong(vll_halfLifeValueValue));
 
         //update and then display 
-        updateDecayCounter(o, &currValueKey, vll_currValueValue, 
-            &halfLifeValue);
+        updateDecayCounter(o, currValueKey, vll_currValueValue, 
+            halfLifeValue);
     }
-    addHashFieldToReply(c, o, &currValueKey);
+    addHashFieldToReply(c, o, currValueKey);
 }
 
 void updateDecayCounter(robj* o, robj *currValueKey, long long currentValue, 
                         robj *halfLife){
-    robj currTimeKey = {
-        .ptr = sdsnew("currTime"), 
-        .encoding = REDIS_ENCODING_EMBSTR,
-        .type = REDIS_STRING,
-        .refcount = 1 };
+
+    robj *currTimeKey = createObject(REDIS_STRING, sdsnew("currTime"));
     unsigned int vlen_time = UINT_MAX;
     long long timeVal = LLONG_MAX;
-    hashTypeGetFromZiplist(o, &currTimeKey, NULL, &vlen_time, &timeVal);
+    hashTypeGetFromZiplist(o, currTimeKey, NULL, &vlen_time, &timeVal);
 
     long long currTime = currentTimestampInMillis();
     long deltaTime = currTime - timeVal; 
@@ -910,13 +877,10 @@ void updateDecayCounter(robj* o, robj *currValueKey, long long currentValue,
         double tau = atoll(halfLife->ptr) / log(2.0); 
         currentValue *= exp(deltaTime * -0.001 / tau);
 
-        robj currValueValue = {
-            .ptr = sdsfromlonglong(currentValue),
-            .encoding = REDIS_ENCODING_RAW,
-            .type = REDIS_ENCODING_EMBSTR,
-            .refcount = 1 };
+        robj *currValueValue = createObject(REDIS_STRING, 
+            sdsfromlonglong(currentValue));
 
-        hashTypeSet(o, currValueKey, &currValueValue);
+        hashTypeSet(o, currValueKey, currValueValue);
     }
     setCurrentTime(o);
 }
