@@ -771,7 +771,7 @@ void hscanCommand(redisClient *c) {
     scanGenericCommand(c,o,cursor);
 }
 
-long long currentTimestamp(){
+long long currentTimestampInMillis(){
     struct timeval currTime;
     gettimeofday(&currTime, NULL);
     long long millis = currTime.tv_sec*1000LL + currTime.tv_usec/1000;
@@ -779,7 +779,22 @@ long long currentTimestamp(){
     return millis; 
 }
 
-/* lambda counter has key -> currentValue, timestamp and tau
+void setCurrentTime(robj *o){
+    unsigned long long currTime = currentTimestampInMillis(); //timestamp        
+    robj currTimeKey = {
+        .ptr = sdsnew("currTime"), 
+        .encoding = REDIS_ENCODING_EMBSTR,
+        .type = REDIS_STRING,
+        .refcount = 1 };        
+    robj currTimeValue = {
+        .ptr = sdsfromlonglong(currTime),
+        .encoding = REDIS_ENCODING_RAW,
+        .type = REDIS_STRING,
+        .refcount = 1 };        
+    hashTypeSet(o, &currTimeKey, &currTimeValue);    
+}
+
+/* lambda counter has key -> currentValue, timestamp and half life 
  * data structure used : 
  * hash data structure
  * hmset key -> currValue : _, halfLife : _, currentTime: _
@@ -797,106 +812,117 @@ void incrDecayCommand(redisClient *c) {
         return;
     }
 
-    robj* currValueValue = c->argv[2];
-    robj* halfLifeValue = c->argv[3]; /*Half life time */
+    robj* currValueValue = c->argv[2]; //TODO double
+    robj* halfLifeValue = c->argv[3];
 
-    unsigned long long currTime = currentTimestamp(); //timestamp
-
-    robj currValueKey = {.ptr = sdsnew("currValue"), 
-                         .encoding = REDIS_ENCODING_RAW,
-                         .type = REDIS_ENCODING_EMBSTR,
-                         .refcount = 1 };
+    robj currValueKey = {
+        .ptr = sdsnew("currValue"), 
+        .encoding = REDIS_ENCODING_RAW,
+        .type = REDIS_ENCODING_EMBSTR,
+        .refcount = 1 };
 
     o = lookupKeyRead(c->db, c->argv[1]);
+    if(o != NULL){
+        // unsigned int vlen = UINT_MAX;
+        // double vll = LLONG_MAX;
+        // hashTypeGetFromZiplist(o, &currValueKey, NULL,  &vlen, &vll);
+        double* vll;
+        getDoubleFromObject(currValueKey, vll);
+        updateDecayCounter(o, &currValueKey, vll, halfLifeValue);
 
-    if(o != NULL){ 
-        unsigned int vlen = UINT_MAX;
-        long long vll = LLONG_MAX;
-        hashTypeGetFromZiplist(o, &currValueKey, NULL,  &vlen, &vll);
-        long long res = atoll(currValueValue->ptr) + vll;
-        currValueValue->ptr = sdsfromlonglong(res);
+        double res = atoll(currValueValue->ptr) + vll;
+        char result[128];
+        d2string(result, sizeof(result), res);
+        currValueValue->ptr = sdsnew(result);
     }
-
-    robj halfLifeKey = {.ptr = sdsnew("halfLife"), 
-                        .encoding = REDIS_ENCODING_EMBSTR,
-                        .type = REDIS_STRING,
-                        .refcount = 1 };
-
-    robj currTimeKey = {.ptr = sdsnew("currTime"), 
-                        .encoding = REDIS_ENCODING_EMBSTR,
-                        .type = REDIS_STRING,
-                        .refcount = 1 };
-
-    robj currTimeValue = {
-                     .ptr = sdsfromlonglong(currTime),
-                     .encoding = REDIS_ENCODING_RAW,
-                     .type = REDIS_STRING,
-                     .refcount = 1 };
+    robj halfLifeKey = {
+        .ptr = sdsnew("halfLife"), 
+        .encoding = REDIS_ENCODING_EMBSTR,
+        .type = REDIS_STRING,
+        .refcount = 1 };
 
     /* Create the key in the database  */
     if((o = hashTypeLookupWriteOrCreate(c, c->argv[1])) == NULL){
         redisPanic("creating key caused an error in the database");
     }
-
-    /* Encode and set initValue, halfLife, currTime. */
     
+    setCurrentTime(o);
     hashTypeSet(o, &currValueKey, currValueValue);
     hashTypeSet(o, &halfLifeKey, halfLifeValue);
-    hashTypeSet(o, &currTimeKey, &currTimeValue);
 
     addReply(c, shared.ok);
-
     signalModifiedKey(c->db, c->argv[1]);
     notifyKeyspaceEvent(REDIS_NOTIFY_HASH, "hset", c->argv[1],c->db->id);
     server.dirty++;
 }
 
 void getDecayCommand(redisClient *c) {
-
     /* HMGET with currValue as the key */
     robj *o; 
-
     o = lookupKeyRead(c->db, c->argv[1]);
+    robj currValueKey = {
+        .ptr = sdsnew("currValue"), 
+        .encoding = REDIS_ENCODING_RAW,
+        .type = REDIS_ENCODING_EMBSTR,
+        .refcount = 1 };
+    if(o != NULL){
+        //get currValueValue
+        unsigned int vlen_currValueValue = UINT_MAX;
+        double vll_currValueValue = LLONG_MAX;
+        hashTypeGetFromZiplist(o, &currValueKey, NULL, 
+            &vlen_currValueValue, &vll_currValueValue);
 
-    //get the currValue, halfLife and currTime from the hash function
-    //update their values before proceeding to the get command
+        //get halfLifeValue 
+        robj halfLifeKey = {
+            .ptr = sdsnew("halfLife"), 
+            .encoding = REDIS_ENCODING_EMBSTR,
+            .type = REDIS_STRING,
+            .refcount = 1 };
 
-    updateDecayCounter();
-    
-    robj field = {.ptr = sdsnew("currValue"), 
-                  .encoding = REDIS_ENCODING_RAW,
-                  .type = REDIS_STRING,
-                  .refcount = 1 };
+        unsigned int vlen_halfLifeValueValue = UINT_MAX;
+        long long vll_halfLifeValueValue = LLONG_MAX;
+        hashTypeGetFromZiplist(o, &halfLifeKey, NULL, 
+            &vlen_halfLifeValueValue, &vll_halfLifeValueValue);
+        robj halfLifeValue = {
+            .ptr = sdsfromlonglong(vll_halfLifeValueValue),
+            .encoding = REDIS_ENCODING_RAW,
+            .type = REDIS_ENCODING_EMBSTR,
+            .refcount = 1 };
 
-    addHashFieldToReply(c, o, &field);
-
-    return;
+        //update and then display 
+        updateDecayCounter(o, &currValueKey, vll_currValueValue, 
+            &halfLifeValue);
+    }
+    addHashFieldToReply(c, o, &currValueKey);
 }
 
-void updateDecayCounter(robj *currValue, robj *halfLife, robj *currTime){
+void updateDecayCounter(robj* o, robj *currValueKey, double currentValue, 
+                        robj *halfLife){
+    robj currTimeKey = {
+        .ptr = sdsnew("currTime"), 
+        .encoding = REDIS_ENCODING_EMBSTR,
+        .type = REDIS_STRING,
+        .refcount = 1 };
+    unsigned int vlen_time = UINT_MAX;
+    long long timeVal = LLONG_MAX;
+    hashTypeGetFromZiplist(o, &currTimeKey, NULL, &vlen_time, &timeVal);
 
-    /*
-        for GETDECAY : 
-            pass in three values to helper function
+    long long currTime = currentTimestampInMillis();
+    long deltaTime = currTime - timeVal; 
 
-        for INCRDECAY : 
-            currValue and halfLife passed in from cmd-line 
-            currTime passed in from lookupKeyRead() function
-    */
+    if(deltaTime >= 0){ //almost always, but better safe than sorry!
+        double tau = atoll(halfLife->ptr) / log(2.0); 
+        currentValue *= exp(deltaTime * -0.001 / tau);
+        char result[128]; 
+        d2string(result, sizeof(result), currentValue);
 
-    // double tau = atof((sds)halfLifeValue->ptr);
+        robj currValueValue = {
+            .ptr = sdsnew(result),
+            .encoding = REDIS_ENCODING_RAW,
+            .type = REDIS_ENCODING_EMBSTR,
+            .refcount = 1 };
 
-    // printf("TAU IS %f", tau);
-
-    //given the key id, do a lookup, get the key, 
-    //get the appropriate timestamp and update
-
-    // long tau = halfLife/log(2.0); needed for update only
-
-
-    // double tau = halfLife / math.log(2.0)
-    //value = Math.exp(deltaTime * -0.001 / tau)
-
-    //TODO : figure out how to put a (key, value, tau) tuple in the db
-    //and how to do lookups
+        hashTypeSet(o, currValueKey, &currValueValue);
+    }
+    setCurrentTime(o);
 }
