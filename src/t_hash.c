@@ -803,7 +803,10 @@ void incrDecayCommand(redisClient *c) {
         return;
     }
 
-    robj* currValueValue = c->argv[2]; //TODO double
+    robj* currValueValue = c->argv[2];
+    long long data = (long long) currValueValue->ptr;
+    currValueValue->ptr = sdsfromlonglong(data);
+    printf("%s \n\n\n\n", currValueValue->ptr);
     robj* halfLifeValue = c->argv[3];
 
     robj *currValueKey = createObject(REDIS_STRING, sdsnew("currValue"));
@@ -825,6 +828,7 @@ void incrDecayCommand(redisClient *c) {
     if((o = hashTypeLookupWriteOrCreate(c, c->argv[1])) == NULL){
         redisPanic("creating key caused an error in the database");
     }
+
     
     setCurrentTime(o);
     hashTypeSet(o, currValueKey, currValueValue);
@@ -874,13 +878,14 @@ void updateDecayCounter(robj* o, robj *currValueKey, long long currentValue,
     long deltaTime = currTime - timeVal; 
 
     if(deltaTime >= 0){ //almost always, but better safe than sorry!
-        double tau = atoll(halfLife->ptr) / log(2.0); 
-        currentValue *= exp(deltaTime * -0.001 / tau);
-
-        robj *currValueValue = createObject(REDIS_STRING, 
-            sdsfromlonglong(currentValue));
-
-        hashTypeSet(o, currValueKey, currValueValue);
+        double tau = atoll(halfLife->ptr) / log(2.0);
+        double deltaValue = exp(deltaTime * -0.001 / tau);
+        if(deltaValue >= 1.0){
+            currentValue *= deltaValue;
+            robj *currValueValue = createObject(REDIS_STRING, 
+                sdsfromlonglong(currentValue));
+            hashTypeSet(o, currValueKey, currValueValue);
+        }
     }
     setCurrentTime(o);
 }
