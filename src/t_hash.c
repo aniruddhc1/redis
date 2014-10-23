@@ -786,32 +786,32 @@ void setCurrentTime(robj *o){
 }
 
 /* lambda counter has key -> currentValue, timestamp and half life 
- * data structure used : 
- * hash data structure
  * hmset key -> currValue : _, halfLife : _, currentTime: _
  *
  * user input is : 
  * INCRDECAY key initialValue halfLife 
- * actually put into db: 
+ * actually put into db:
  * HMSET key initialValue __ halfLife __ currTime(stamp) __ 
  */
 void incrDecayCommand(redisClient *c) {
     robj *o;
 
+    /* check for valid number of arguments */
     if((c->argc % 2) == 1){
         addReplyError(c, "Wrong number of arguments for INCRDECAY");
         return;
     }
 
+    /* get cmdline args passed in */
     robj* currValueValue = c->argv[2];
-    long long data = (long long) currValueValue->ptr;
-    currValueValue->ptr = sdsfromlonglong(data);
-    printf("%s \n\n\n\n", currValueValue->ptr);
     robj* halfLifeValue = c->argv[3];
+
 
     robj *currValueKey = createObject(REDIS_STRING, sdsnew("currValue"));
 
     o = lookupKeyRead(c->db, c->argv[1]);
+
+    /* key already exists in db */ 
     if(o != NULL){
         unsigned int vlen = UINT_MAX;
         long long vll = LLONG_MAX;
@@ -824,11 +824,10 @@ void incrDecayCommand(redisClient *c) {
 
     robj *halfLifeKey = createObject(REDIS_STRING, sdsnew("halfLife"));
 
-    /* Create the key in the database  */
+    /* Lookup or create the key in the database  */
     if((o = hashTypeLookupWriteOrCreate(c, c->argv[1])) == NULL){
-        redisPanic("creating key caused an error in the database");
+        redisPanic("Creating key caused an error in the db");
     }
-
     
     setCurrentTime(o);
     hashTypeSet(o, currValueKey, currValueValue);
@@ -840,12 +839,13 @@ void incrDecayCommand(redisClient *c) {
 }
 
 void getDecayCommand(redisClient *c) {
-    /* HMGET with currValue as the key */
     robj *o; 
     o = lookupKeyRead(c->db, c->argv[1]);
+
     robj *currValueKey = createObject(REDIS_STRING, sdsnew("currValue"));
+
+    /* key already exists in the db */
     if(o != NULL){
-        //get currValueValue
         unsigned int vlen_currValueValue = UINT_MAX;
         long long vll_currValueValue = LLONG_MAX;
         hashTypeGetFromZiplist(o, currValueKey, NULL, 
@@ -866,9 +866,8 @@ void getDecayCommand(redisClient *c) {
     addHashFieldToReply(c, o, currValueKey);
 }
 
-void updateDecayCounter(robj* o, robj *currValueKey, long long currentValue, 
+void updateDecayCounter(robj* o, robj *currValueKey, long long currentValue,
                         robj *halfLife){
-
     robj *currTimeKey = createObject(REDIS_STRING, sdsnew("currTime"));
     unsigned int vlen_time = UINT_MAX;
     long long timeVal = LLONG_MAX;
@@ -877,15 +876,14 @@ void updateDecayCounter(robj* o, robj *currValueKey, long long currentValue,
     long long currTime = currentTimestampInMillis();
     long deltaTime = currTime - timeVal; 
 
-    if(deltaTime >= 0){ //almost always, but better safe than sorry!
-        double tau = atoll(halfLife->ptr) / log(2.0);
-        double deltaValue = exp(deltaTime * -0.001 / tau);
-        if(deltaValue >= 1.0){
-            currentValue *= deltaValue;
-            robj *currValueValue = createObject(REDIS_STRING, 
-                sdsfromlonglong(currentValue));
-            hashTypeSet(o, currValueKey, currValueValue);
-        }
+    if(deltaTime >= 0){
+        double tau = atoll(halfLife->ptr) / log(2.0); 
+        currentValue *= exp(deltaTime * -0.001 / tau);
+
+        robj *currValueValue = createObject(REDIS_STRING, 
+            sdsfromlonglong(currentValue));
+
+        hashTypeSet(o, currValueKey, currValueValue);
     }
     setCurrentTime(o);
 }
