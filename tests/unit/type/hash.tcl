@@ -162,7 +162,8 @@ start_server {tags {"hash"}} {
 
     test {GETDECAY against non-existant key} {
         set rv {}
-        lappend rv [r getdecay "foo"]
+        lappend rv [r getdecay "foo"] 
+        #MEMORY LEAK HERE 
         # lappend rv [r getdecay "bar"]
 
         set _ $rv

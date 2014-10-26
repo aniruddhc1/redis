@@ -836,8 +836,8 @@ void incrDecayCommand(redisClient *c) {
     addReply(c, shared.ok);
     signalModifiedKey(c->db, c->argv[1]);
     server.dirty++;
-    freeStringObject(currValueKey);
-    freeStringObject(halfLifeKey);
+    // freeStringObject(currValueKey);
+    // freeStringObject(halfLifeKey);
 }
 
 /*
