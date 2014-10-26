@@ -140,6 +140,112 @@ start_server {tags {"hash"}} {
         set _ $rv
     } {{{} {}} {{} {}} {{} {}}}
 
+    test {INCRDECAY wrong number of args} {
+        catch {r incrdecay smallhash key1} err
+        format $err
+    } {*wrong number*}
+
+    test {INCRDECAY wrong number of args} {
+            catch {r incrdecay smallhash key1 key2 key1 key2} err
+            format $err
+    } {*wrong number*}    
+
+    test {GETDECAY wrong number of args} {
+        catch {r getdecay} err
+        format $err
+    } {*wrong number*}
+
+    test {GETDECAY wrong number of args} {
+        catch {r getdecay smallhash key1} err
+        format $err
+    } {*wrong number*}
+
+    test {GETDECAY against non-existant key} {
+        set rv {}
+        lappend rv [r getdecay "foo"]
+        # lappend rv [r getdecay "bar"]
+
+        set _ $rv
+    } {{}}
+
+    # test {INCRDECAY/GETDECAY two successive INCRDECAYs on one counter} {
+    #     r INCRDECAY "foo" 6 3
+    #     r INCRDECAY "foo" 6 3 
+    #     if {12 ne [r getdecay "foo"] } {
+    #         set err "GETDECAY foo != [r getdecay "foo"]. Expected 12"
+    #         break
+    #     }
+    #     #sleep 3s 
+    #     r debug sleep 3
+    #     if {6 ne [r getdecay "foo"] } {
+    #         set err "GETDECAY foo != [r getdecay "foo"]. Expected 6"
+    #         break
+    #     }
+    #     #sleep 3s
+    #     r debug sleep 3
+    #     if {3 ne [r getdecay "foo"] } {
+    #         set err "GETDECAY foo != [r getdecay "foo"]. Expected 3"
+    #         break
+    #     }
+    # }
+
+    # test {INCRDECAY/GETDECAY two INCRDECAY with a 5s interval} {
+    #     r flushall 
+    #     r INCRDECAY "foo" 10 10 
+    #     #sleep 5s
+    #     r debug sleep 5
+    #     r INCRDECAY "foo" 10 10 
+    #     if {15 ne [r getdecay "foo"]} {
+    #         set err "GETDECAY foo != [r getdecay "foo"]. Expected 15"
+    #         break
+    #     }
+    # }
+
+
+
+    # test {INCRDECAY/GETDECAY sleep for less than half life and get} {
+    #     r flushall 
+    #     r INCRDECAY "foo" 5 50
+    #     #sleep 10s
+    #     r debug sleep 10
+    #     if {4 ne [r getdecay "foo"]} {
+    #         set err "GETDECAY foo != [r getdecay "foo"]. Expected 4"
+    #         break
+    #     }
+    #     #sleep 10s
+    #     r debug sleep 10
+    #     if {3 ne [r getdecay "foo"]} {
+    #         set err "GETDECAY foo != [r getdecay "foo"]. Expected 3"
+    #         break
+    #     }
+    # }
+
+    # test {INCRDECAY/GETDECAY two half-life counters, same initial value and half life} {
+    #     r flushall 
+    #     r INCRDECAY "foo" 100 10
+    #     r INCRDECAY "bar" 100 10 
+    #     #sleep 10s
+    #     r debug sleep 10
+    #     if {50 ne [r getdecay "foo"]} {
+    #         set err "GETDECAY foo != [r getdecay "foo"]. Expected 50"
+    #         break
+    #     }
+    #     if {50 ne [r getdecay "bar"]} {
+    #         set err "GETDECAY bar != [r getdecay "bar"]. Expected 50"
+    #         break
+    #     }
+    #     #sleep 10s
+    #     r debug sleep 10
+    #     if {25 ne [r getdecay "foo"]} {
+    #         set err "GETDECAY foo != [r getdecay "foo"]. Expected 25"
+    #         break
+    #     }
+    #     if {25 ne [r getdecay "bar"]} {
+    #         set err "GETDECAY bar != [r getdecay "bar"]. Expected 25"
+    #         break
+    #     }
+    # }
+
     test {HMGET against wrong type} {
         r set wrongtype somevalue
         assert_error "*wrong*" {r hmget wrongtype field1 field2}

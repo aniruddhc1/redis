@@ -431,12 +431,8 @@ robj *getDecodedObject(robj *o) {
         incrRefCount(o);
         return o;
     }
-    printf("o -> encoding is %d\n", o->encoding);
-    printf("int encoding is %d\n", REDIS_ENCODING_INT);
     
     if (o->type == REDIS_STRING && o->encoding == REDIS_ENCODING_INT) {
-
-        printf("\n\nvivian fong\n\n");
         char buf[32];
 
         ll2string(buf,32,(long)o->ptr);

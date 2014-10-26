@@ -797,8 +797,8 @@ void incrDecayCommand(redisClient *c) {
     robj *o;
 
     /* check for valid number of arguments */
-    if((c->argc % 2) == 1){
-        addReplyError(c, "Wrong number of arguments for INCRDECAY");
+    if(c->argc != 4){
+        addReplyError(c, "Wrong number of arguments for INCRDECAY. \n Expected format is : \n INCRDECAY <key> <initialValue> <halfLife>");
         return;
     }
 
@@ -836,11 +836,20 @@ void incrDecayCommand(redisClient *c) {
     addReply(c, shared.ok);
     signalModifiedKey(c->db, c->argv[1]);
     server.dirty++;
+    freeStringObject(currValueKey);
+    freeStringObject(halfLifeKey);
 }
 
+/*
+ * GETDECAY <key>
+ */
 void getDecayCommand(redisClient *c) {
     robj *o; 
     o = lookupKeyRead(c->db, c->argv[1]);
+    if(c->argc != 2){
+        addReplyError(c, "Wrong number of arguments for GETDECAY. \n Expected format is : \n GETDECAY <key>");
+        return;
+    }
 
     robj *currValueKey = createObject(REDIS_STRING, sdsnew("currValue"));
 
@@ -862,8 +871,11 @@ void getDecayCommand(redisClient *c) {
         //update and then display 
         updateDecayCounter(o, currValueKey, vll_currValueValue, 
             halfLifeValue);
+        freeStringObject(halfLifeKey);
+        freeStringObject(halfLifeValue);
     }
     addHashFieldToReply(c, o, currValueKey);
+    freeStringObject(currValueKey);
 }
 
 void updateDecayCounter(robj* o, robj *currValueKey, long long currentValue,
@@ -884,6 +896,8 @@ void updateDecayCounter(robj* o, robj *currValueKey, long long currentValue,
             sdsfromlonglong(currentValue));
 
         hashTypeSet(o, currValueKey, currValueValue);
+        freeStringObject(currValueValue);
     }
     setCurrentTime(o);
+    freeStringObject(currTimeKey);
 }
