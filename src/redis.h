@@ -1370,6 +1370,8 @@ void incrCommand(redisClient *c);
 void incrDecayCommand(redisClient *c);
 void getDecayCommand(redisClient *c);
 void updateDecayCounter();
+void setCurrentTime(robj *o);
+long long currentTimestampInMillis();
 void decrCommand(redisClient *c);
 void incrbyCommand(redisClient *c);
 void decrbyCommand(redisClient *c);

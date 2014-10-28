@@ -783,6 +783,8 @@ void setCurrentTime(robj *o){
     robj *currTimeKey = createObject(REDIS_STRING, sdsnew("currTime"));
     robj *currTimeValue = createObject(REDIS_STRING, sdsfromlonglong(currTime));
     hashTypeSet(o, currTimeKey, currTimeValue);    
+    decrRefCount(currTimeKey);
+    decrRefCount(currTimeValue);
 }
 
 /* lambda counter has key -> currentValue, timestamp and half life 
@@ -806,7 +808,6 @@ void incrDecayCommand(redisClient *c) {
     robj* currValueValue = c->argv[2];
     robj* halfLifeValue = c->argv[3];
 
-
     robj *currValueKey = createObject(REDIS_STRING, sdsnew("currValue"));
 
     o = lookupKeyRead(c->db, c->argv[1]);
@@ -819,13 +820,16 @@ void incrDecayCommand(redisClient *c) {
         updateDecayCounter(o, currValueKey, vll, halfLifeValue);
 
         long long res = atoll(currValueValue->ptr) + vll;
+        sdsfree(currValueValue->ptr);
         currValueValue->ptr = sdsfromlonglong(res);
     }
 
     robj *halfLifeKey = createObject(REDIS_STRING, sdsnew("halfLife"));
 
-    /* Lookup or create the key in the database  */
+    /* Lookup or create the key in the database */
     if((o = hashTypeLookupWriteOrCreate(c, c->argv[1])) == NULL){
+        // decrRefCount(currValueKey);
+        // decrRefCount(halfLifeKey);
         redisPanic("Creating key caused an error in the db");
     }
     
@@ -836,8 +840,8 @@ void incrDecayCommand(redisClient *c) {
     addReply(c, shared.ok);
     signalModifiedKey(c->db, c->argv[1]);
     server.dirty++;
-    // freeStringObject(currValueKey);
-    // freeStringObject(halfLifeKey);
+    decrRefCount(currValueKey);
+    decrRefCount(halfLifeKey);
 }
 
 /*
@@ -871,11 +875,11 @@ void getDecayCommand(redisClient *c) {
         //update and then display 
         updateDecayCounter(o, currValueKey, vll_currValueValue, 
             halfLifeValue);
-        freeStringObject(halfLifeKey);
-        freeStringObject(halfLifeValue);
+        decrRefCount(halfLifeKey);
+        decrRefCount(halfLifeValue);
     }
     addHashFieldToReply(c, o, currValueKey);
-    freeStringObject(currValueKey);
+    decrRefCount(currValueKey);
 }
 
 void updateDecayCounter(robj* o, robj *currValueKey, long long currentValue,
@@ -888,16 +892,16 @@ void updateDecayCounter(robj* o, robj *currValueKey, long long currentValue,
     long long currTime = currentTimestampInMillis();
     long deltaTime = currTime - timeVal; 
 
-    if(deltaTime >= 0){
-        double tau = atoll(halfLife->ptr) / log(2.0); 
+    if(deltaTime >= 200){
+        double tau = atoll(halfLife->ptr) / log(2.0);
         currentValue *= exp(deltaTime * -0.001 / tau);
 
         robj *currValueValue = createObject(REDIS_STRING, 
             sdsfromlonglong(currentValue));
 
         hashTypeSet(o, currValueKey, currValueValue);
-        freeStringObject(currValueValue);
+        decrRefCount(currValueValue);
     }
     setCurrentTime(o);
-    freeStringObject(currTimeKey);
+    decrRefCount(currTimeKey);
 }

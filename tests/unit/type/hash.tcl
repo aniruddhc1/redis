@@ -162,33 +162,37 @@ start_server {tags {"hash"}} {
 
     test {GETDECAY against non-existant key} {
         set rv {}
-        lappend rv [r getdecay "foo"] 
-        #MEMORY LEAK HERE 
-        # lappend rv [r getdecay "bar"]
-
+        lappend rv [r getdecay "foo"]
+        lappend rv [r getdecay "bar"]
         set _ $rv
-    } {{}}
+    } {{} {}}
 
-    # test {INCRDECAY/GETDECAY two successive INCRDECAYs on one counter} {
-    #     r INCRDECAY "foo" 6 3
-    #     r INCRDECAY "foo" 6 3 
-    #     if {12 ne [r getdecay "foo"] } {
-    #         set err "GETDECAY foo != [r getdecay "foo"]. Expected 12"
-    #         break
-    #     }
-    #     #sleep 3s 
-    #     r debug sleep 3
-    #     if {6 ne [r getdecay "foo"] } {
-    #         set err "GETDECAY foo != [r getdecay "foo"]. Expected 6"
-    #         break
-    #     }
-    #     #sleep 3s
+    test {INCRDECAY/GETDECAY simple incrdecay and getdecay} {
+        r INCRDECAY "wooo" 100 10
+        assert_equal 100 [r GETDECAY "wooo"]
+    }
+
+    test {INCRDECAY/GETDECAY two successive INCRDECAYs on one counter} {
+        r INCRDECAY "foo" 12 3
+
+        # r INCRDECAY "foo" 12 3 
+        # assert_equal 24 [r getdecay "foo"]
+        assert_equal 12 [r GETDECAY "foo"]
+
+        # r sleep 3s 
+        r debug sleep 3
+        # if {6 ne [r GETDECAY "foo"] } {
+            # set err "GETDECAY foo != [r getdecay "foo"]. Expected 6"
+            # set err "Expected 6"
+            # break
+        # }
+        #sleep 3s
     #     r debug sleep 3
     #     if {3 ne [r getdecay "foo"] } {
     #         set err "GETDECAY foo != [r getdecay "foo"]. Expected 3"
     #         break
     #     }
-    # }
+    }
 
     # test {INCRDECAY/GETDECAY two INCRDECAY with a 5s interval} {
     #     r flushall 

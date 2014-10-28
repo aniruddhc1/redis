@@ -136,7 +136,7 @@ struct redisCommand redisCommandTable[] = {
     {"substr",getrangeCommand,4,"r",0,NULL,1,1,1,0,0},
     {"incr",incrCommand,2,"wmF",0,NULL,1,1,1,0,0},
     {"incrdecay",incrDecayCommand,4,"wmF",0,NULL,1,1,1,0,0},
-    {"getdecay", getDecayCommand, 2, "r",0,NULL,1,1,1,0,0},
+    {"getdecay", getDecayCommand,2,"rF",0,NULL,1,1,1,0,0},
     {"decr",decrCommand,2,"wmF",0,NULL,1,1,1,0,0},
     {"mget",mgetCommand,-2,"r",0,NULL,1,-1,1,0,0},
     {"rpush",rpushCommand,-3,"wmF",0,NULL,1,1,1,0,0},
