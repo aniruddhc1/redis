@@ -175,81 +175,45 @@ start_server {tags {"hash"}} {
     test {INCRDECAY/GETDECAY two successive INCRDECAYs on one counter} {
         r INCRDECAY "foo" 12 3
 
-        # r INCRDECAY "foo" 12 3 
-        # assert_equal 24 [r getdecay "foo"]
+        r INCRDECAY "foo" 12 3 
+        assert_equal 24 [r getdecay "foo"]
+
+        r debug sleep 2.9
         assert_equal 12 [r GETDECAY "foo"]
 
-        # r sleep 3s 
-        r debug sleep 3
-        # if {6 ne [r GETDECAY "foo"] } {
-            # set err "GETDECAY foo != [r getdecay "foo"]. Expected 6"
-            # set err "Expected 6"
-            # break
-        # }
-        #sleep 3s
-    #     r debug sleep 3
-    #     if {3 ne [r getdecay "foo"] } {
-    #         set err "GETDECAY foo != [r getdecay "foo"]. Expected 3"
-    #         break
-    #     }
+        r debug sleep 2.9
+        assert_equal 6 [r GETDECAY "foo"]
     }
 
-    # test {INCRDECAY/GETDECAY two INCRDECAY with a 5s interval} {
-    #     r flushall 
-    #     r INCRDECAY "foo" 10 10 
-    #     #sleep 5s
-    #     r debug sleep 5
-    #     r INCRDECAY "foo" 10 10 
-    #     if {15 ne [r getdecay "foo"]} {
-    #         set err "GETDECAY foo != [r getdecay "foo"]. Expected 15"
-    #         break
-    #     }
-    # }
+    test {INCRDECAY/GETDECAY two INCRDECAY with a 5s interval} {
+        r INCRDECAY "foobar" 10 10 
+        r debug sleep 5
+        r INCRDECAY "foo" 10 10 
+        assert_equal 16 [r GETDECAY "foo"]
+    }
 
+    test {INCRDECAY/GETDECAY sleep for less than half life and get} {
+        r INCRDECAY "foo" 5 50
 
+        r debug sleep 9.9
+        assert_equal 4 [r GETDECAY "foo"]
 
-    # test {INCRDECAY/GETDECAY sleep for less than half life and get} {
-    #     r flushall 
-    #     r INCRDECAY "foo" 5 50
-    #     #sleep 10s
-    #     r debug sleep 10
-    #     if {4 ne [r getdecay "foo"]} {
-    #         set err "GETDECAY foo != [r getdecay "foo"]. Expected 4"
-    #         break
-    #     }
-    #     #sleep 10s
-    #     r debug sleep 10
-    #     if {3 ne [r getdecay "foo"]} {
-    #         set err "GETDECAY foo != [r getdecay "foo"]. Expected 3"
-    #         break
-    #     }
-    # }
+        r debug sleep 9.9
+        assert_equal 3 [r GETDECAY "foo"]
+    }
 
-    # test {INCRDECAY/GETDECAY two half-life counters, same initial value and half life} {
-    #     r flushall 
-    #     r INCRDECAY "foo" 100 10
-    #     r INCRDECAY "bar" 100 10 
-    #     #sleep 10s
-    #     r debug sleep 10
-    #     if {50 ne [r getdecay "foo"]} {
-    #         set err "GETDECAY foo != [r getdecay "foo"]. Expected 50"
-    #         break
-    #     }
-    #     if {50 ne [r getdecay "bar"]} {
-    #         set err "GETDECAY bar != [r getdecay "bar"]. Expected 50"
-    #         break
-    #     }
-    #     #sleep 10s
-    #     r debug sleep 10
-    #     if {25 ne [r getdecay "foo"]} {
-    #         set err "GETDECAY foo != [r getdecay "foo"]. Expected 25"
-    #         break
-    #     }
-    #     if {25 ne [r getdecay "bar"]} {
-    #         set err "GETDECAY bar != [r getdecay "bar"]. Expected 25"
-    #         break
-    #     }
-    # }
+    test {INCRDECAY/GETDECAY two half-life counters, same initial value and half life} {
+        r INCRDECAY "foo" 100 10
+        r INCRDECAY "bar" 100 10 
+
+        r debug sleep 10
+        assert_equal 50 [r GETDECAY "foo"]
+        assert_equal 50 [r GETDECAY "bar"]
+
+        r debug sleep 10
+        assert_equal 25 [r GETDECAY "foo"]
+        assert_equal 25 [r GETDECAY "bar"]
+    }
 
     test {HMGET against wrong type} {
         r set wrongtype somevalue

@@ -820,7 +820,7 @@ void incrDecayCommand(redisClient *c) {
         updateDecayCounter(o, currValueKey, vll, halfLifeValue);
 
         long long res = atoll(currValueValue->ptr) + vll;
-        sdsfree(currValueValue->ptr);
+        sdsclear(currValueValue->ptr);
         currValueValue->ptr = sdsfromlonglong(res);
     }
 
@@ -828,8 +828,8 @@ void incrDecayCommand(redisClient *c) {
 
     /* Lookup or create the key in the database */
     if((o = hashTypeLookupWriteOrCreate(c, c->argv[1])) == NULL){
-        // decrRefCount(currValueKey);
-        // decrRefCount(halfLifeKey);
+        decrRefCount(currValueKey);
+        decrRefCount(halfLifeKey);
         redisPanic("Creating key caused an error in the db");
     }
     
@@ -839,9 +839,10 @@ void incrDecayCommand(redisClient *c) {
 
     addReply(c, shared.ok);
     signalModifiedKey(c->db, c->argv[1]);
-    server.dirty++;
     decrRefCount(currValueKey);
     decrRefCount(halfLifeKey);
+    server.dirty++;
+
 }
 
 /*
@@ -892,7 +893,7 @@ void updateDecayCounter(robj* o, robj *currValueKey, long long currentValue,
     long long currTime = currentTimestampInMillis();
     long deltaTime = currTime - timeVal; 
 
-    if(deltaTime >= 200){
+    if(deltaTime >= 600){ //600ms threshold
         double tau = atoll(halfLife->ptr) / log(2.0);
         currentValue *= exp(deltaTime * -0.001 / tau);
 
